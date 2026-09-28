@@ -1,10 +1,10 @@
 import os
 from flask import Flask
+from db import init_db
 
 app = Flask(__name__)
+init_db()
 
-DATA_DIR = os.environ.get("DATA_DIR", "./data")
-DB_PATH = os.path.join(DATA_DIR, "app.db")
 
 @app.route("/")
 def index():
