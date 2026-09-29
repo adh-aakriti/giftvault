@@ -1,7 +1,8 @@
 import os
 import uuid
-from flask import Flask, g, request
+from flask import Flask, g, request, render_template, redirect, url_for
 from db import init_db
+import people
 
 app = Flask(__name__)
 init_db()
@@ -32,7 +33,18 @@ def persist_user(response):
 
 @app.route("/")
 def index():
-    return g.user_id
+    return redirect(url_for("people_list"))
+
+
+@app.route("/people", methods=["GET", "POST"])
+def people_list():
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        if name:
+            people.add_person(g.user_id, name)
+        return redirect(url_for("people_list"))
+
+    return render_template("people.html", people=people.list_people(g.user_id))
 
 
 if __name__ == "__main__":

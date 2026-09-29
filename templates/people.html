@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>giftvault</title>
+</head>
+<body>
+  <h1>People</h1>
+
+  <ul>
+    {% for person in people %}
+      <li><a href="/person/{{ person.id }}">{{ person.name }}</a></li>
+    {% else %}
+      <li>No one yet.</li>
+    {% endfor %}
+  </ul>
+
+  <form method="post" action="/people">
+    <input name="name" placeholder="Name" required>
+    <button type="submit">Add</button>
+  </form>
+</body>
+</html>
