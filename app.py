@@ -3,6 +3,7 @@ import uuid
 from flask import Flask, g, request, render_template, redirect, url_for
 from db import init_db
 import people
+import ideas
 
 app = Flask(__name__)
 init_db()
@@ -45,6 +46,30 @@ def people_list():
         return redirect(url_for("people_list"))
 
     return render_template("people.html", people=people.list_people(g.user_id))
+
+
+@app.route("/person/<int:person_id>", methods=["GET", "POST"])
+def person_page(person_id):
+    person = ideas.get_person(g.user_id, person_id)
+    if person is None:
+        return "Not found", 404
+
+    error = None
+    if request.method == "POST":
+        url = request.form.get("url", "")
+        note = request.form.get("note", "")
+        if not url.strip() and not note.strip():
+            error = "Add a link or a note"
+        else:
+            ideas.add_idea(person_id, url, note)
+            return redirect(url_for("person_page", person_id=person_id))
+
+    return render_template(
+        "person_detail.html",
+        person=person,
+        ideas=ideas.list_ideas(person_id),
+        error=error,
+    )
 
 
 if __name__ == "__main__":

@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{ person.name }}</title>
+</head>
+<body>
+  <p><a href="/people">Back</a></p>
+  <h1>{{ person.name }}</h1>
+
+  <form method="post">
+    <input name="url" placeholder="Link">
+    <input name="note" placeholder="Note">
+    <button type="submit">Save</button>
+  </form>
+
+  {% if error %}<p>{{ error }}</p>{% endif %}
+
+  <ul>
+    {% for idea in ideas %}
+      <li>
+        {% if idea.url %}<a href="{{ idea.url }}">{{ idea.url }}</a>{% endif %}
+        {% if idea.note %}{{ idea.note }}{% endif %}
+      </li>
+    {% else %}
+      <li>Nothing saved yet.</li>
+    {% endfor %}
+  </ul>
+</body>
+</html>
