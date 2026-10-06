@@ -11,16 +11,21 @@
   <form method="post">
     <input name="url" placeholder="Link">
     <input name="note" placeholder="Note">
+    <input name="tags" placeholder="Tags, comma separated" list="tag-options">
+    <datalist id="tag-options">
+      {% for tag in all_tags %}<option value="{{ tag }}">{% endfor %}
+    </datalist>
     <button type="submit">Save</button>
   </form>
 
   {% if error %}<p>{{ error }}</p>{% endif %}
 
   <ul>
-    {% for idea in ideas %}
+    {% for item in items %}
       <li>
-        {% if idea.url %}<a href="{{ idea.url }}">{{ idea.url }}</a>{% endif %}
-        {% if idea.note %}{{ idea.note }}{% endif %}
+        {% if item.idea.url %}<a href="{{ item.idea.url }}">{{ item.idea.url }}</a>{% endif %}
+        {% if item.idea.note %}{{ item.idea.note }}{% endif %}
+        {% if item.tags %}<small>{{ item.tags|join(", ") }}</small>{% endif %}
       </li>
     {% else %}
       <li>Nothing saved yet.</li>

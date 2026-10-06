@@ -4,6 +4,7 @@ from flask import Flask, g, request, render_template, redirect, url_for
 from db import init_db
 import people
 import ideas
+import tagger
 
 app = Flask(__name__)
 init_db()
@@ -61,13 +62,23 @@ def person_page(person_id):
         if not url.strip() and not note.strip():
             error = "Add a link or a note"
         else:
-            ideas.add_idea(person_id, url, note)
+            idea_id = ideas.add_idea(person_id, url, note)
+            tag_names = tagger.parse_tags(request.form.get("tags", ""))
+            if tag_names:
+                ideas.set_tags(g.user_id, idea_id, tag_names)
             return redirect(url_for("person_page", person_id=person_id))
+
+    rows = ideas.list_ideas(person_id)
+    items = [
+        {"idea": row, "tags": ideas.tags_for_idea(row["id"])}
+        for row in rows
+    ]
 
     return render_template(
         "person_detail.html",
         person=person,
-        ideas=ideas.list_ideas(person_id),
+        items=items,
+        all_tags=ideas.all_tags(g.user_id),
         error=error,
     )
 
