@@ -34,6 +34,17 @@ In my own words, how this works: `?` placeholders mean the driver sends the quer
  
 `get_person` filters on user_id as well as id because person_id comes from the URL and anyone can change it. Without the user_id check they could open someone else's person page. With it, the query returns nothing and they get a 404, which also doesn't reveal whether that id exists.
 
+## 2026-10-06 — Tagging: parser, storage and form
+Tool: Claude
+Prompt: Comma-separated tag input on the idea form, stored through the tags and idea_tags tables
+Disposition: Accepted
+What changed and why: Accepted as written. Kept the tagger deliberately simple after the professor's feedback that two well-executed features beat three partly finished ones.
+In my own words, how this works: `parse_tags` takes the raw string from the form, splits it on commas, strips whitespace from each part, lowercases it, and drops duplicates within the same submission. Lowercasing is what makes "Marvel" and "marvel" the same tag rather than two.
+ 
+`set_tags` uses `INSERT OR IGNORE` twice. On the tags table, the UNIQUE constraint on (user_id, name) means an existing tag is silently skipped instead of being duplicated. On idea_tags, the composite primary key on (idea_id, tag_id) does the same for an idea that already carries that tag. In both cases the database enforces it, so the application does not have to check first.
+ 
+`tagger.py` imports nothing and touches neither Flask nor the database. That keeps `parse_tags` a pure function: the same input always produces the same output, so it can be tested directly without a server or a database file. It is the main coverage target for the Ideas domain.
+
 ## 2026-10-06 — Occasions domain: date logic, countdown and routes
 Tool: Claude
 Prompt: Occasions module with annual recurrence, days-until calculation and an upcoming page sorted by urgency
