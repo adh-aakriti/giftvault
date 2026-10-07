@@ -1,10 +1,12 @@
 import os
 import uuid
+from datetime import date
 from flask import Flask, g, request, render_template, redirect, url_for
 from db import init_db
 import people
 import ideas
 import tagger
+import occasions
 
 app = Flask(__name__)
 init_db()
@@ -79,8 +81,33 @@ def person_page(person_id):
         person=person,
         items=items,
         all_tags=ideas.all_tags(g.user_id),
+        occasions=occasions.list_for_person(person_id),
         error=error,
     )
+
+
+@app.route("/upcoming")
+def upcoming():
+    return render_template(
+        "upcoming.html",
+        occasions=occasions.upcoming(g.user_id, date.today()),
+    )
+
+
+@app.route("/person/<int:person_id>/occasions", methods=["POST"])
+def add_occasion(person_id):
+    person = ideas.get_person(g.user_id, person_id)
+    if person is None:
+        return "Not found", 404
+
+    label = request.form.get("label", "").strip()
+    date_str = request.form.get("date", "").strip()
+    recurs = request.form.get("recurs") == "on"
+
+    if label and date_str:
+        occasions.add_occasion(person_id, label, date_str, recurs)
+
+    return redirect(url_for("person_page", person_id=person_id))
 
 
 if __name__ == "__main__":

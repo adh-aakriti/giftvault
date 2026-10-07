@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Upcoming</title>
+</head>
+<body>
+  <p><a href="/people">People</a></p>
+  <h1>Upcoming</h1>
+
+  <ul>
+    {% for o in occasions %}
+      <li>
+        <a href="/person/{{ o.person_id }}">{{ o.person_name }}</a>
+        — {{ o.label }} in {{ o.days }} days
+        ({{ o.idea_count }} ideas saved)
+      </li>
+    {% else %}
+      <li>Nothing coming up.</li>
+    {% endfor %}
+  </ul>
+</body>
+</html>

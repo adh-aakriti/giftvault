@@ -8,6 +8,23 @@
   <p><a href="/people">Back</a></p>
   <h1>{{ person.name }}</h1>
 
+  <h2>Occasions</h2>
+  <ul>
+    {% for o in occasions %}
+      <li>{{ o.label }} — {{ o.date }}{% if o.recurs_annually %} (every year){% endif %}</li>
+    {% else %}
+      <li>None yet.</li>
+    {% endfor %}
+  </ul>
+
+  <form method="post" action="/person/{{ person.id }}/occasions">
+    <input name="label" placeholder="Birthday">
+    <input name="date" type="date">
+    <label><input type="checkbox" name="recurs"> Every year</label>
+    <button type="submit">Add occasion</button>
+  </form>
+
+  <h2>Ideas</h2>
   <form method="post">
     <input name="url" placeholder="Link">
     <input name="note" placeholder="Note">
