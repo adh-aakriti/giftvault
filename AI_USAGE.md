@@ -33,3 +33,14 @@ What changed and why: Accepted as written.
 In my own words, how this works: `?` placeholders mean the driver sends the query and the values separately, so a value can never be interpreted as SQL. Building the query with an f-string would let a crafted input run as a command, which is SQL injection.
  
 `get_person` filters on user_id as well as id because person_id comes from the URL and anyone can change it. Without the user_id check they could open someone else's person page. With it, the query returns nothing and they get a 404, which also doesn't reveal whether that id exists.
+
+## 2026-10-06 — Occasions domain: date logic, countdown and routes
+Tool: Claude
+Prompt: Occasions module with annual recurrence, days-until calculation and an upcoming page sorted by urgency
+Disposition: Accepted
+What changed and why: Accepted as written.
+In my own words, how this works: `next_occurrence` checks whether a recurring date has already passed this year and rolls it forward to next year if so, rather than returning a negative countdown. A non-recurring date that has passed returns None and drops off the list. Leap-year dates fall back to 1 March in non-leap years, because `replace(year=...)` raises ValueError when 29 February does not exist in the target year.
+ 
+`today` is a parameter rather than something the function looks up itself, so the function is deterministic and can be tested with any date. If it called `date.today()` internally, a test asserting "8 days away" would fail the next day, and a leap-year case could only be tested in a leap year. The real date enters at the route, which calls `occasions.upcoming(g.user_id, date.today())`.
+ 
+`upcoming` joins to `people` because it needs user_id to check ownership, which is its own domain's relationship. For the idea count it calls `ideas.count_ideas_for()` rather than joining to the ideas table. That function call is the seam between the two domains: if they were split into separate services later, the call would become a request and nothing else would change.
