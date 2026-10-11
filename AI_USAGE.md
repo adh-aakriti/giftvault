@@ -25,7 +25,7 @@ Disposition: Accepted
 What changed and why: Accepted as written.
 In my own words, how this works: `before_request` is a Flask hook that runs before every route function. Mine reads the user id from the cookie, or generates one if the visitor doesn't have it yet. `after_request` runs once the route has returned and receives the response object, which is where the cookie gets set, since setting a cookie means adding a header to the outgoing response. `g` is Flask's per-request scratchpad: anything stored on it is available to every function handling that request and discarded afterwards. The cookie is only set for new visitors, because an existing visitor's browser already holds it and sends it with every request.
  
-## 2026-09-29 — People and ideas query modules, routes and templates
+## 2026-09-30 — People and ideas query modules, routes and templates
 Tool: Claude
 Prompt: Query modules for people and ideas, with the list page, person page, and their templates
 Disposition: Accepted
@@ -45,7 +45,7 @@ In my own words, how this works: `parse_tags` takes the raw string from the form
  
 `tagger.py` imports nothing and touches neither Flask nor the database. That keeps `parse_tags` a pure function: the same input always produces the same output, so it can be tested directly without a server or a database file. It is the main coverage target for the Ideas domain.
 
-## 2026-10-06 — Occasions domain: date logic, countdown and routes
+## 2026-10-07 — Occasions domain: date logic, countdown and routes
 Tool: Claude
 Prompt: Occasions module with annual recurrence, days-until calculation and an upcoming page sorted by urgency
 Disposition: Accepted
