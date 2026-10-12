@@ -78,3 +78,14 @@ In my own words, how this works: `@pytest.mark.parametrize` takes a table of inp
  
 The count went up by three rather than two because one of the original functions held two assertions in the same body, for `""` and for `None`. Splitting them into separate rows is the real benefit, not just tidiness: if the first assertion fails, the second never runs, so a bug in the `None` case would have been invisible until the first one was fixed. As separate rows each case is reported independently.
  
+ ## 2026-10-12 — Stylesheet, base template and page structure
+Tool: Claude
+Prompt: A stylesheet and shared base template for the three pages, with empty states that tell a first-time visitor what to do
+Disposition: Modified
+What changed and why: The first version used table-display and floats for layout because of a rendering constraint on Claude's side. I asked for flexbox instead, since that is what the layout actually calls for. Idea counts were added to the people list, and a date filter so stored dates display readably.
+In my own words, how this works: `base.html` is a wrapper holding the page shell, the stylesheet link and the nav, with a `{% block content %}` gap in the middle. Each page declares `{% extends "base.html" %}` and fills that gap, so the page templates no longer carry their own `<head>` and a new page inherits the header and stylesheet without repeating them. Anything outside a block in a child template is ignored.
+ 
+`prettydate` is a Jinja filter registered in `app.py`. SQLite has no date type, so a date column comes back as the text `1999-11-02`. The filter parses it with `date.fromisoformat` and formats it as `2 November 1999` for display, leaving the stored value alone.
+ 
+The people list calls `ideas.count_ideas_for()` once per person rather than doing one `GROUP BY` join. A join would mean `people.py` querying the ideas tables, which is the rule I set in ADR-2: only the Ideas domain touches its own tables. That rule is what makes the separation checkable rather than asserted, since anyone reading the files can confirm it, and it is what would let the two domains be split into services by replacing function calls with requests. The cost is N+1 queries, one to list people and one per person, which is fine at this size. The production fix would keep the boundary and remove the N+1 by having `ideas.py` expose a function that takes a list of person ids and answers in a single query.
+ 
