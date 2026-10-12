@@ -13,7 +13,7 @@ Python 3.10 or newer. No external services, no database server.
 ## Setup
  
 ```bash
-git clone <repository-url>
+git clone https://github.com/adh-aakriti/giftvault
 cd giftvault
 python3 -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
@@ -51,7 +51,7 @@ The port defaults to 5001 rather than Flask's usual 5000, which macOS uses for A
 pytest --cov=tagger --cov=occasions --cov-report=term-missing
 ```
  
-25 tests, 96% coverage on the two logic modules.
+28 tests, 96% coverage on the two logic modules.
  
 ## Using it
  
