@@ -25,14 +25,19 @@ def load_user():
 @app.after_request
 def persist_user(response):
     if getattr(g, "new_user", False):
-        response.set_cookie(
-            COOKIE_NAME,
-            g.user_id,
-            max_age=60 * 60 * 24 * 365 * 5,
-            httponly=True,
-            samesite="Lax",
-        )
+        response.set_cookie(COOKIE_NAME, g.user_id,
+                            max_age=60 * 60 * 24 * 365 * 5,
+                            httponly=True, samesite="Lax")
     return response
+
+
+@app.template_filter("prettydate")
+def prettydate(value):
+    """Turn an ISO date string from SQLite into something readable."""
+    try:
+        return date.fromisoformat(str(value)).strftime("%-d %B %Y")
+    except ValueError:
+        return value
 
 
 @app.route("/")
@@ -47,8 +52,9 @@ def people_list():
         if name:
             people.add_person(g.user_id, name)
         return redirect(url_for("people_list"))
-
-    return render_template("people.html", people=people.list_people(g.user_id))
+    rows = people.list_people(g.user_id)
+    entries = [{"person": r, "count": ideas.count_ideas_for(r["id"])} for r in rows]
+    return render_template("people.html", entries=entries, page="people")
 
 
 @app.route("/person/<int:person_id>", methods=["GET", "POST"])
@@ -56,42 +62,31 @@ def person_page(person_id):
     person = ideas.get_person(g.user_id, person_id)
     if person is None:
         return "Not found", 404
-
     error = None
     if request.method == "POST":
         url = request.form.get("url", "")
         note = request.form.get("note", "")
         if not url.strip() and not note.strip():
-            error = "Add a link or a note"
+            error = "Add a link or a note."
         else:
             idea_id = ideas.add_idea(person_id, url, note)
             tag_names = tagger.parse_tags(request.form.get("tags", ""))
             if tag_names:
                 ideas.set_tags(g.user_id, idea_id, tag_names)
             return redirect(url_for("person_page", person_id=person_id))
-
     rows = ideas.list_ideas(person_id)
-    items = [
-        {"idea": row, "tags": ideas.tags_for_idea(row["id"])}
-        for row in rows
-    ]
-
-    return render_template(
-        "person_detail.html",
-        person=person,
-        items=items,
-        all_tags=ideas.all_tags(g.user_id),
-        occasions=occasions.list_for_person(person_id),
-        error=error,
-    )
+    items = [{"idea": r, "tags": ideas.tags_for_idea(r["id"])} for r in rows]
+    return render_template("person_detail.html", person=person, items=items,
+                           all_tags=ideas.all_tags(g.user_id),
+                           occasions=occasions.list_for_person(person_id),
+                           error=error, page="people")
 
 
 @app.route("/upcoming")
 def upcoming():
-    return render_template(
-        "upcoming.html",
-        occasions=occasions.upcoming(g.user_id, date.today()),
-    )
+    return render_template("upcoming.html",
+                           occasions=occasions.upcoming(g.user_id, date.today()),
+                           page="upcoming")
 
 
 @app.route("/person/<int:person_id>/occasions", methods=["POST"])
@@ -99,14 +94,11 @@ def add_occasion(person_id):
     person = ideas.get_person(g.user_id, person_id)
     if person is None:
         return "Not found", 404
-
     label = request.form.get("label", "").strip()
     date_str = request.form.get("date", "").strip()
     recurs = request.form.get("recurs") == "on"
-
     if label and date_str:
         occasions.add_occasion(person_id, label, date_str, recurs)
-
     return redirect(url_for("person_page", person_id=person_id))
 
 

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}giftvault{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="wrap">
+    <header class="masthead">
+      <a class="brand" href="{{ url_for('people_list') }}">giftvault</a>
+      <nav>
+        <a href="{{ url_for('people_list') }}"{% if page == 'people' %} aria-current="page"{% endif %}>People</a>
+        <a href="{{ url_for('upcoming') }}"{% if page == 'upcoming' %} aria-current="page"{% endif %}>Upcoming</a>
+      </nav>
+    </header>
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

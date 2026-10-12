@@ -1,52 +1,64 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>{{ person.name }}</title>
-</head>
-<body>
-  <p><a href="/people">Back</a></p>
-  <h1>{{ person.name }}</h1>
+{% extends "base.html" %}
+{% block title %}{{ person.name }}{% endblock %}
+{% block content %}
 
-  <h2>Occasions</h2>
-  <ul>
+<a class="back" href="{{ url_for('people_list') }}">All people</a>
+
+<h1>{{ person.name }}</h1>
+
+{% if occasions %}
+  <ul class="occasions">
     {% for o in occasions %}
-      <li>{{ o.label }} — {{ o.date }}{% if o.recurs_annually %} (every year){% endif %}</li>
-    {% else %}
-      <li>None yet.</li>
+      <li>
+        <span class="label">{{ o.label }}</span>
+        <span>{{ o.date | prettydate }}{% if o.recurs_annually %}, every year{% endif %}</span>
+      </li>
     {% endfor %}
   </ul>
+{% endif %}
 
-  <form method="post" action="/person/{{ person.id }}/occasions">
+<form method="post" action="{{ url_for('add_occasion', person_id=person.id) }}">
+  <div class="field-row">
     <input name="label" placeholder="Birthday">
     <input name="date" type="date">
-    <label><input type="checkbox" name="recurs"> Every year</label>
-    <button type="submit">Add occasion</button>
-  </form>
+  </div>
+  <div class="form-actions">
+    <label class="check"><input type="checkbox" name="recurs"> Every year</label>
+    <button type="submit">Add date</button>
+  </div>
+</form>
 
-  <h2>Ideas</h2>
-  <form method="post">
-    <input name="url" placeholder="Link">
-    <input name="note" placeholder="Note">
-    <input name="tags" placeholder="Tags, comma separated" list="tag-options">
-    <datalist id="tag-options">
-      {% for tag in all_tags %}<option value="{{ tag }}">{% endfor %}
-    </datalist>
-    <button type="submit">Save</button>
-  </form>
+<h2>Ideas</h2>
 
-  {% if error %}<p>{{ error }}</p>{% endif %}
+<form method="post" class="stack">
+  <input name="note" placeholder="What did you notice?">
+  <input name="url" placeholder="Link (optional)">
+  <input name="tags" placeholder="Tags, separated by commas" list="tag-options">
+  <datalist id="tag-options">
+    {% for tag in all_tags %}<option value="{{ tag }}">{% endfor %}
+  </datalist>
+  <div class="form-actions">
+    <button type="submit">Save idea</button>
+  </div>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+</form>
 
-  <ul>
+{% if items %}
+  <ul class="ideas">
     {% for item in items %}
       <li>
-        {% if item.idea.url %}<a href="{{ item.idea.url }}">{{ item.idea.url }}</a>{% endif %}
-        {% if item.idea.note %}{{ item.idea.note }}{% endif %}
-        {% if item.tags %}<small>{{ item.tags|join(", ") }}</small>{% endif %}
+        {% if item.idea.note %}<span class="note">{{ item.idea.note }}</span>{% endif %}
+        {% if item.idea.url %}<a class="link" href="{{ item.idea.url }}">{{ item.idea.url }}</a>{% endif %}
+        {% if item.tags %}
+          <div class="tags">
+            {% for tag in item.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+          </div>
+        {% endif %}
       </li>
-    {% else %}
-      <li>Nothing saved yet.</li>
     {% endfor %}
   </ul>
-</body>
-</html>
+{% else %}
+  <p class="empty">Nothing saved for {{ person.name }} yet. Anything counts, even a half-remembered remark.</p>
+{% endif %}
+
+{% endblock %}

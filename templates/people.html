@@ -1,24 +1,35 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>giftvault</title>
-</head>
-<body>
-  <h1>People</h1>
-  <p><a href="/upcoming">Upcoming occasions</a></p>
+{% extends "base.html" %}
+{% block title %}People{% endblock %}
+{% block content %}
 
-  <ul>
-    {% for person in people %}
-      <li><a href="/person/{{ person.id }}">{{ person.name }}</a></li>
-    {% else %}
-      <li>No one yet.</li>
+<h1>People</h1>
+<p class="lede">Somewhere to keep gift ideas as you notice them, so they are still there when the occasion comes round.</p>
+
+{% if entries %}
+  <ul class="people">
+    {% for entry in entries %}
+      <li>
+        <a href="{{ url_for('person_page', person_id=entry.person.id) }}">
+          <span class="name">{{ entry.person.name }}</span>
+          <span class="meta">
+            {% if entry.count == 0 %}nothing saved
+            {% elif entry.count == 1 %}1 idea
+            {% else %}{{ entry.count }} ideas{% endif %}
+          </span>
+        </a>
+      </li>
     {% endfor %}
   </ul>
+{% else %}
+  <p class="empty">No one here yet. Add the first person below.</p>
+{% endif %}
 
-  <form method="post" action="/people">
+<h2>Add someone</h2>
+<form method="post" action="{{ url_for('people_list') }}">
+  <div class="field-row">
     <input name="name" placeholder="Name" required>
-    <button type="submit">Add</button>
-  </form>
-</body>
-</html>
+    <button type="submit">Add person</button>
+  </div>
+</form>
+
+{% endblock %}
