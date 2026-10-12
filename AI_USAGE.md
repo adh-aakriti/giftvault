@@ -89,3 +89,9 @@ In my own words, how this works: `base.html` is a wrapper holding the page shell
  
 The people list calls `ideas.count_ideas_for()` once per person rather than doing one `GROUP BY` join. A join would mean `people.py` querying the ideas tables, which is the rule I set in ADR-2: only the Ideas domain touches its own tables. That rule is what makes the separation checkable rather than asserted, since anyone reading the files can confirm it, and it is what would let the two domains be split into services by replacing function calls with requests. The cost is N+1 queries, one to list people and one per person, which is fine at this size. The production fix would keep the boundary and remove the N+1 by having `ideas.py` expose a function that takes a list of person ids and answers in a single query.
  
+ ## 2026-10-12 — Filling in the provided Dockerfile template
+Tool: Claude
+Prompt: Which of my source files to list in TODO 3 of the provided Dockerfile template
+Disposition: Modified
+What changed and why: TODO 1, 2 and 4 already carried the correct Python defaults, so only the source copy needed filling in. The contract checker passed on the first run; its output is in the README.
+In my own words, how this works: The dependency install sits above the source copy so Docker can reuse the install layer. Editing a source file only invalidates the layers below it, so Flask is not reinstalled on every build. `COPY . .` is wrong because the build context is my working directory and `.gitignore` does not apply to it, so `.git`, my venv and my local `data/app.db` would all go into the image. `/data` is outside `/app` because a volume is mounted there at runtime, so the database survives the container being rebuilt.
