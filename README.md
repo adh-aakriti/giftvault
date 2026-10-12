@@ -69,8 +69,10 @@ people.py           people queries
 ideas.py            ideas and tags queries
 tagger.py           tag parsing (pure functions)
 occasions.py        date logic (pure functions) and occasion queries
-templates/          Jinja templates
+templates/          Jinja templates, extending base.html
+static/             stylesheet
 tests/              pytest suite
+docs/               architecture and database diagrams
 ADR.md              architecture decision record
 AI_USAGE.md         AI usage log
 ```
