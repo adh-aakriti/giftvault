@@ -1,0 +1,37 @@
+flowchart TD
+    Browser([Browser])
+
+    subgraph container["single process · single container"]
+        App["<b>app.py</b><br/>routes · cookie identity · validation"]
+        Templates["<b>templates/</b><br/>Jinja"]
+
+        subgraph ideasDomain["Ideas domain"]
+            IdeasMod["<b>ideas.py</b><br/>ideas · tags"]
+            Tagger["<b>tagger.py</b><br/>pure, no DB"]
+        end
+
+        subgraph occasionsDomain["Occasions domain"]
+            OccMod["<b>occasions.py</b><br/>recurrence · countdown"]
+        end
+
+        People["<b>people.py</b><br/>shared · owns person_id"]
+        Db["<b>db.py</b><br/>connections · schema init"]
+    end
+
+    Sqlite[("SQLite<br/>$DATA_DIR/app.db")]
+
+    Browser -->|HTTP| App
+    App --> Templates
+    App --> IdeasMod
+    App --> OccMod
+    App --> People
+    IdeasMod --> Tagger
+    OccMod -.->|count_ideas_for| IdeasMod
+    IdeasMod --> People
+    OccMod --> People
+    People --> Db
+    IdeasMod --> Db
+    OccMod --> Db
+    Db --> Sqlite
+
+    linkStyle 6 stroke:#c96442,stroke-width:3px

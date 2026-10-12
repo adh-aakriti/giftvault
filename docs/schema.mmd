@@ -1,0 +1,35 @@
+erDiagram
+    PEOPLE ||--o{ IDEAS : "has"
+    PEOPLE ||--o{ OCCASIONS : "has"
+    IDEAS ||--o{ IDEA_TAGS : "tagged by"
+    TAGS ||--o{ IDEA_TAGS : "applied to"
+
+    PEOPLE {
+        INTEGER id PK
+        TEXT user_id
+        TEXT name
+    }
+    IDEAS {
+        INTEGER id PK
+        INTEGER person_id FK
+        TEXT url
+        TEXT note
+        TEXT created_at
+        TEXT given_at
+    }
+    TAGS {
+        INTEGER id PK
+        TEXT user_id
+        TEXT name
+    }
+    IDEA_TAGS {
+        INTEGER idea_id PK, FK
+        INTEGER tag_id PK, FK
+    }
+    OCCASIONS {
+        INTEGER id PK
+        INTEGER person_id FK
+        TEXT label
+        TEXT date
+        INTEGER recurs_annually
+    }
