@@ -68,3 +68,13 @@ In my own words, how this works: The tests sit in a subfolder, so when pytest im
 `monkeypatch.setenv` sets DATA_DIR for the duration of one test and restores it afterwards. It works because db.py reads the path from the environment rather than hardcoding it, which was already required so the deployment can point the database at mounted storage. The same property lets a test point it at a temporary directory.
  
 db.py reads DATA_DIR at import time, so the value is fixed once the module loads and the fixture's change would otherwise be ignored. `importlib.reload` re-executes the file so it picks up the temporary directory, and people, ideas and occasions are reloaded too because they hold a reference to db's connection function. Reading the path inside `get_connection()` instead would remove the need for this.
+
+## 2026-10-12 — Parametrizing the tag parsing tests
+Tool: Claude
+Prompt: Rewrite the seven separate tag parsing tests as a single parametrized test
+Disposition: Accepted
+What changed and why: Two cases were added that the original tests did not cover: a single tag with no comma, and whitespace-only input. Test count went from 25 to 28; coverage unchanged at 96%.
+In my own words, how this works: `@pytest.mark.parametrize` takes a table of input and expected-output pairs and runs the same test body once for each row, so seven near-identical test functions collapse into one. pytest counts each row as its own test, which is why the suite still reports a count rather than a single test.
+ 
+The count went up by three rather than two because one of the original functions held two assertions in the same body, for `""` and for `None`. Splitting them into separate rows is the real benefit, not just tidiness: if the first assertion fails, the second never runs, so a bug in the `None` case would have been invisible until the first one was fixed. As separate rows each case is reported independently.
+ 
