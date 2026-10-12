@@ -55,3 +55,16 @@ In my own words, how this works: `next_occurrence` checks whether a recurring da
 `today` is a parameter rather than something the function looks up itself, so the function is deterministic and can be tested with any date. If it called `date.today()` internally, a test asserting "8 days away" would fail the next day, and a leap-year case could only be tested in a leap year. The real date enters at the route, which calls `occasions.upcoming(g.user_id, date.today())`.
  
 `upcoming` joins to `people` because it needs user_id to check ownership, which is its own domain's relationship. For the idea count it calls `ideas.count_ideas_for()` rather than joining to the ideas table. That function call is the seam between the two domains: if they were split into separate services later, the call would become a request and nothing else would change.
+
+## 2026-10-11 — Unit tests and coverage configuration
+Tool: Claude
+Prompt: pytest tests for tag parsing, date recurrence and ownership filtering, with coverage measured on the logic modules
+Disposition: Modified
+What changed and why: Added a pytest.ini after the first run failed to import the project modules. Added further tests for list_for_person and a leap-year case, which raised coverage from 56% to 96%.
+In my own words, how this works: The tests sit in a subfolder, so when pytest imports a test file and that file does `from tagger import parse_tags`, Python looks for `tagger` on its import path, where the project root is not present by default. That is the ModuleNotFoundError I got on the first run. `pythonpath = .` adds the root, so the import resolves.
+ 
+`temp_db` is a pytest fixture, so it runs before any test that takes it as a parameter. It creates a temporary directory, points DATA_DIR at it, and initialises the schema. Each test gets its own call, so tests cannot contaminate the real database or each other. That isolation is what lets a test assert the people list equals exactly one name.
+ 
+`monkeypatch.setenv` sets DATA_DIR for the duration of one test and restores it afterwards. It works because db.py reads the path from the environment rather than hardcoding it, which was already required so the deployment can point the database at mounted storage. The same property lets a test point it at a temporary directory.
+ 
+db.py reads DATA_DIR at import time, so the value is fixed once the module loads and the fixture's change would otherwise be ignored. `importlib.reload` re-executes the file so it picks up the temporary directory, and people, ideas and occasions are reloaded too because they hold a reference to db's connection function. Reading the path inside `get_connection()` instead would remove the need for this.
