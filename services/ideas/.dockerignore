@@ -1,0 +1,11 @@
+.git
+.env
+venv/
+**/__pycache__
+.pytest_cache
+.coverage
+data/
+*.db
+tests/
+pytest.ini
+requirements-dev.txt
