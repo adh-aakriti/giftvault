@@ -1,23 +1,26 @@
-from db import get_connection
+from .db import get_connection
 
 
 def list_people(user_id):
     conn = get_connection()
-    rows = conn.execute(
-        "SELECT id, name FROM people WHERE user_id = ? ORDER BY name",
+    cur = conn.cursor(as_dict=True)
+    cur.execute(
+        "SELECT id, name FROM people WHERE user_id = %s ORDER BY name",
         (user_id,),
-    ).fetchall()
+    )
+    rows = cur.fetchall()
     conn.close()
     return rows
 
 
 def add_person(user_id, name):
     conn = get_connection()
-    cur = conn.execute(
-        "INSERT INTO people (user_id, name) VALUES (?, ?)",
+    cur = conn.cursor(as_dict=True)
+    cur.execute(
+        "INSERT INTO people (user_id, name) OUTPUT INSERTED.id VALUES (%s, %s)",
         (user_id, name.strip()),
     )
+    person_id = cur.fetchone()["id"]
     conn.commit()
-    person_id = cur.lastrowid
     conn.close()
     return person_id
