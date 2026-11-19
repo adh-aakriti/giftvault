@@ -1,22 +1,64 @@
 import os
-import sqlite3
+import time
+from urllib.parse import unquote, urlparse
 
-DATA_DIR = os.environ.get("DATA_DIR", "./data")
-DB_PATH = os.path.join(DATA_DIR, "app.db")
-SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema.sql")
+import pymssql
+
+MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), "..", "migrations")
+CONNECT_RETRY_SECONDS = int(os.environ.get("DB_CONNECT_RETRY_S", "90"))
+
+
+def _connection_params():
+    url = urlparse(os.environ["DATABASE_URL"])
+    return {
+        "server": url.hostname,
+        "port": url.port or 1433,
+        "user": unquote(url.username),
+        "password": unquote(url.password),
+        "database": url.path.lstrip("/"),
+    }
 
 
 def get_connection():
-    os.makedirs(DATA_DIR, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    params = _connection_params()
+    deadline = time.monotonic() + CONNECT_RETRY_SECONDS
+    delay = 1
+    while True:
+        try:
+            return pymssql.connect(login_timeout=10, **params)
+        except pymssql.Error as exc:
+            if time.monotonic() + delay > deadline:
+                raise
+            print(f"database not ready ({type(exc).__name__}), retrying in {delay}s", flush=True)
+            time.sleep(delay)
+            delay = min(delay * 2, 10)
 
 
 def init_db():
-    with open(SCHEMA_PATH) as f:
-        conn = get_connection()
-        conn.executescript(f.read())
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "IF OBJECT_ID('schema_migrations') IS NULL "
+            "CREATE TABLE schema_migrations ("
+            "version NVARCHAR(100) PRIMARY KEY, "
+            "applied_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME())"
+        )
         conn.commit()
+        cur.execute("SELECT version FROM schema_migrations")
+        applied = {row[0] for row in cur.fetchall()}
+        for name in sorted(os.listdir(MIGRATIONS_DIR)):
+            if not name.endswith(".sql") or name in applied:
+                continue
+            with open(os.path.join(MIGRATIONS_DIR, name), encoding="utf-8") as f:
+                sql = f.read()
+            try:
+                cur.execute(sql)
+                cur.execute("INSERT INTO schema_migrations (version) VALUES (%s)", (name,))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            print(f"migration applied: {name}", flush=True)
+    finally:
         conn.close()
