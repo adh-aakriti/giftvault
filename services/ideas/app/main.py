@@ -1,107 +1,117 @@
 import os
-import uuid
-from datetime import date
-from flask import Flask, g, request, render_template, redirect, url_for
-from db import init_db
-import people
-import ideas
-import tagger
-import occasions
+import time
+
+from flask import Flask, g, jsonify, request
+from werkzeug.exceptions import HTTPException
+
+from . import ideas, people, tagger
+from .db import init_db
+
+UI_ORIGIN = os.environ.get("UI_ORIGIN", "http://localhost:8080")
 
 app = Flask(__name__)
 init_db()
 
-COOKIE_NAME = "giftvault_user"
+
+def json_body():
+    body = request.get_json(silent=True)
+    return body if isinstance(body, dict) else {}
+
+
+def iso(value):
+    return value.isoformat() if value is not None else None
 
 
 @app.before_request
-def load_user():
-    g.user_id = request.cookies.get(COOKIE_NAME)
-    g.new_user = g.user_id is None
-    if g.new_user:
-        g.user_id = uuid.uuid4().hex
+def start_timer_and_identify():
+    g.start = time.monotonic()
+    if request.method == "OPTIONS":
+        return "", 204
+    user_id = request.headers.get("X-User-Id", "").strip()
+    if not user_id or len(user_id) > 64:
+        return jsonify(error="X-User-Id header is required (max 64 characters)"), 400
+    g.user_id = user_id
 
 
 @app.after_request
-def persist_user(response):
-    if getattr(g, "new_user", False):
-        response.set_cookie(COOKIE_NAME, g.user_id,
-                            max_age=60 * 60 * 24 * 365 * 5,
-                            httponly=True, samesite="Lax")
+def add_cors_and_log(response):
+    origin = request.headers.get("Origin")
+    if origin and origin == UI_ORIGIN:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-User-Id"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Vary"] = "Origin"
+    ms = (time.monotonic() - g.get("start", time.monotonic())) * 1000
+    print(f"{request.method} {request.path} {response.status_code} {ms:.0f}ms", flush=True)
     return response
 
 
-@app.template_filter("prettydate")
-def prettydate(value):
-    """Turn an ISO date string from SQLite into something readable."""
-    try:
-        return date.fromisoformat(str(value)).strftime("%-d %B %Y")
-    except ValueError:
-        return value
+@app.errorhandler(Exception)
+def handle_error(exc):
+    if isinstance(exc, HTTPException):
+        return jsonify(error=exc.description), exc.code
+    print(f"unhandled {type(exc).__name__}: {exc}", flush=True)
+    return jsonify(error="internal error"), 500
 
 
-@app.route("/")
-def index():
-    return redirect(url_for("people_list"))
-
-
-@app.route("/people", methods=["GET", "POST"])
-def people_list():
-    if request.method == "POST":
-        name = request.form.get("name", "").strip()
-        if name:
-            people.add_person(g.user_id, name)
-        return redirect(url_for("people_list"))
+@app.route("/people", methods=["GET"])
+def list_people():
     rows = people.list_people(g.user_id)
-    entries = [{"person": r, "count": ideas.count_ideas_for(r["id"])} for r in rows]
-    return render_template("people.html", entries=entries, page="people")
+    return jsonify([
+        {"id": r["id"], "name": r["name"], "idea_count": ideas.count_ideas_for(r["id"])}
+        for r in rows
+    ])
 
 
-@app.route("/person/<int:person_id>", methods=["GET", "POST"])
-def person_page(person_id):
+@app.route("/people", methods=["POST"])
+def create_person():
+    name = str(json_body().get("name") or "").strip()
+    if not name or len(name) > 200:
+        return jsonify(error="name is required (max 200 characters)"), 400
+    person_id = people.add_person(g.user_id, name)
+    return jsonify(id=person_id, name=name), 201
+
+
+@app.route("/people/<int:person_id>", methods=["GET"])
+def get_person(person_id):
     person = ideas.get_person(g.user_id, person_id)
     if person is None:
-        return "Not found", 404
-    error = None
-    if request.method == "POST":
-        url = request.form.get("url", "")
-        note = request.form.get("note", "")
-        if not url.strip() and not note.strip():
-            error = "Add a link or a note."
-        else:
-            idea_id = ideas.add_idea(person_id, url, note)
-            tag_names = tagger.parse_tags(request.form.get("tags", ""))
-            if tag_names:
-                ideas.set_tags(g.user_id, idea_id, tag_names)
-            return redirect(url_for("person_page", person_id=person_id))
-    rows = ideas.list_ideas(person_id)
-    items = [{"idea": r, "tags": ideas.tags_for_idea(r["id"])} for r in rows]
-    return render_template("person_detail.html", person=person, items=items,
-                           all_tags=ideas.all_tags(g.user_id),
-                           occasions=occasions.list_for_person(person_id),
-                           error=error, page="people")
+        return jsonify(error="person not found"), 404
+    items = [
+        {
+            "id": r["id"],
+            "url": r["url"],
+            "note": r["note"],
+            "created_at": iso(r["created_at"]),
+            "given_at": iso(r["given_at"]),
+            "tags": ideas.tags_for_idea(r["id"]),
+        }
+        for r in ideas.list_ideas(person_id)
+    ]
+    return jsonify(id=person["id"], name=person["name"], ideas=items)
 
 
-@app.route("/upcoming")
-def upcoming():
-    return render_template("upcoming.html",
-                           occasions=occasions.upcoming(g.user_id, date.today()),
-                           page="upcoming")
+@app.route("/people/<int:person_id>/ideas", methods=["POST"])
+def create_idea(person_id):
+    if ideas.get_person(g.user_id, person_id) is None:
+        return jsonify(error="person not found"), 404
+    body = json_body()
+    url = str(body.get("url") or "")
+    note = str(body.get("note") or "")
+    if not url.strip() and not note.strip():
+        return jsonify(error="Add a link or a note."), 400
+    if len(url) > 2000 or len(note) > 2000:
+        return jsonify(error="url and note are limited to 2000 characters"), 400
+    idea_id = ideas.add_idea(person_id, url, note)
+    raw_tags = body.get("tags") or ""
+    if isinstance(raw_tags, list):
+        raw_tags = ",".join(str(t) for t in raw_tags)
+    tag_names = tagger.parse_tags(str(raw_tags))
+    if tag_names:
+        ideas.set_tags(g.user_id, idea_id, tag_names)
+    return jsonify(id=idea_id), 201
 
 
-@app.route("/person/<int:person_id>/occasions", methods=["POST"])
-def add_occasion(person_id):
-    person = ideas.get_person(g.user_id, person_id)
-    if person is None:
-        return "Not found", 404
-    label = request.form.get("label", "").strip()
-    date_str = request.form.get("date", "").strip()
-    recurs = request.form.get("recurs") == "on"
-    if label and date_str:
-        occasions.add_occasion(person_id, label, date_str, recurs)
-    return redirect(url_for("person_page", person_id=person_id))
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5001))
-    app.run(host="0.0.0.0", port=port, debug=True)
+@app.route("/tags", methods=["GET"])
+def list_tags():
+    return jsonify(ideas.all_tags(g.user_id))
