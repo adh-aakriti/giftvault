@@ -105,7 +105,10 @@ def add_occasion(person_id):
     except ideas_client.PersonNotFound:
         return jsonify(error="person not found"), 404
     except ideas_client.IdeasUnavailable:
-        return jsonify(error="The Ideas service is unavailable, so the person could not be checked. Try again shortly."), 503
+        return jsonify(
+            error="The Ideas service is unavailable, so the person could not be checked. "
+            "Try again shortly."
+        ), 503
     new_id = occasions.add_occasion(g.user_id, person_id, label, occasion_date, recurs)
     return jsonify(id=new_id, person_id=person_id, label=label,
                    date=occasion_date.isoformat(), recurs_annually=recurs), 201
