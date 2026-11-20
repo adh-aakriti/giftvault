@@ -1,6 +1,6 @@
 from datetime import date
 
-from occasions import next_occurrence, days_until
+from app.occasions import next_occurrence, days_until
 
 
 def test_non_recurring_future_date_returns_itself():
