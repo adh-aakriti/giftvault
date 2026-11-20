@@ -1,7 +1,7 @@
 from datetime import date
 
-from db import get_connection
-import ideas
+from . import ideas_client
+from .db import get_connection
 
 
 def next_occurrence(occasion_date, recurs_annually, today):
@@ -27,54 +27,85 @@ def days_until(target, today):
     return (target - today).days
 
 
-def add_occasion(person_id, label, date_str, recurs_annually):
+def add_occasion(user_id, person_id, label, occasion_date, recurs_annually):
+    """Insert one occasion and return its id. occasion_date is a date object."""
     conn = get_connection()
-    conn.execute(
-        """INSERT INTO occasions (person_id, label, date, recurs_annually)
-           VALUES (?, ?, ?, ?)""",
-        (person_id, label.strip(), date_str, 1 if recurs_annually else 0),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO occasions (user_id, person_id, label, occasion_date, recurs_annually)
+               OUTPUT INSERTED.id
+               VALUES (%s, %s, %s, %s, %s)""",
+            (user_id, person_id, label.strip(), occasion_date, 1 if recurs_annually else 0),
+        )
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        return new_id
+    finally:
+        conn.close()
 
 
-def list_for_person(person_id):
+def list_for_person(user_id, person_id):
     conn = get_connection()
-    rows = conn.execute(
-        """SELECT id, label, date, recurs_annually
-           FROM occasions WHERE person_id = ? ORDER BY date""",
-        (person_id,),
-    ).fetchall()
-    conn.close()
-    return rows
+    try:
+        cur = conn.cursor(as_dict=True)
+        cur.execute(
+            """SELECT id, person_id, label, occasion_date, recurs_annually
+               FROM occasions WHERE user_id = %s AND person_id = %s
+               ORDER BY occasion_date""",
+            (user_id, person_id),
+        )
+        return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def _rows_for_user(user_id):
+    conn = get_connection()
+    try:
+        cur = conn.cursor(as_dict=True)
+        cur.execute(
+            """SELECT id, person_id, label, occasion_date, recurs_annually
+               FROM occasions WHERE user_id = %s""",
+            (user_id,),
+        )
+        return cur.fetchall()
+    finally:
+        conn.close()
 
 
 def upcoming(user_id, today):
-    conn = get_connection()
-    rows = conn.execute(
-        """SELECT o.id, o.label, o.date, o.recurs_annually,
-                  p.id AS person_id, p.name AS person_name
-           FROM occasions o
-           JOIN people p ON p.id = o.person_id
-           WHERE p.user_id = ?""",
-        (user_id,),
-    ).fetchall()
-    conn.close()
+    """Return (results, degraded). If Ideas is down, occasions still come back,
+    with person_name and idea_count set to None, and degraded is True."""
+    rows = _rows_for_user(user_id)
+
+    people = {}
+    degraded = False
+    for person_id in sorted({r["person_id"] for r in rows}):
+        if degraded:
+            break
+        try:
+            people[person_id] = ideas_client.get_person(user_id, person_id)
+        except ideas_client.PersonNotFound:
+            people[person_id] = None
+        except ideas_client.IdeasUnavailable:
+            degraded = True
 
     results = []
     for row in rows:
-        occasion_date = date.fromisoformat(row["date"])
-        nxt = next_occurrence(occasion_date, row["recurs_annually"], today)
+        nxt = next_occurrence(row["occasion_date"], row["recurs_annually"], today)
         if nxt is None:
             continue
+        person = people.get(row["person_id"])
         results.append({
+            "id": row["id"],
             "label": row["label"],
             "person_id": row["person_id"],
-            "person_name": row["person_name"],
-            "date": nxt,
+            "person_name": person.get("name") if person else None,
+            "date": nxt.isoformat(),
             "days": days_until(nxt, today),
-            "idea_count": ideas.count_ideas_for(row["person_id"]),
+            "idea_count": ideas_client.idea_count(person) if person else None,
         })
 
     results.sort(key=lambda r: r["days"])
-    return results
+    return results, degraded
