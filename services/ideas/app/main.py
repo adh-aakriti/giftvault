@@ -5,7 +5,7 @@ from flask import Flask, g, jsonify, request
 from werkzeug.exceptions import HTTPException
 
 from . import ideas, people, tagger
-from .db import init_db
+from .db import check_db, init_db
 
 UI_ORIGIN = os.environ.get("UI_ORIGIN", "http://localhost:8080")
 
@@ -25,6 +25,8 @@ def iso(value):
 @app.before_request
 def start_timer_and_identify():
     g.start = time.monotonic()
+    if request.path == "/health":
+        return None
     if request.method == "OPTIONS":
         return "", 204
     user_id = request.headers.get("X-User-Id", "").strip()
@@ -115,3 +117,14 @@ def create_idea(person_id):
 @app.route("/tags", methods=["GET"])
 def list_tags():
     return jsonify(ideas.all_tags(g.user_id))
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    version = os.environ.get("GIT_SHA", "unknown")
+    try:
+        check_db()
+    except Exception as exc:
+        print(f"health check failed: {type(exc).__name__}", flush=True)
+        return jsonify(status="error", db="error", version=version), 503
+    return jsonify(status="ok", db="ok", version=version)

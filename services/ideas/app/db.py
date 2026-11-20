@@ -1,5 +1,6 @@
 import os
 import time
+import uuid
 from urllib.parse import unquote, urlparse
 
 import pymssql
@@ -19,9 +20,9 @@ def _connection_params():
     }
 
 
-def get_connection():
+def get_connection(retry_seconds=None):
     params = _connection_params()
-    deadline = time.monotonic() + CONNECT_RETRY_SECONDS
+    deadline = time.monotonic() + (CONNECT_RETRY_SECONDS if retry_seconds is None else retry_seconds)
     delay = 1
     while True:
         try:
@@ -60,5 +61,19 @@ def init_db():
                 conn.rollback()
                 raise
             print(f"migration applied: {name}", flush=True)
+    finally:
+        conn.close()
+
+
+def check_db():
+    """Fail fast (no retries): can this service read and write its own database?"""
+    conn = get_connection(retry_seconds=0)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+        cur.fetchall()
+        cur.execute("INSERT INTO schema_migrations (version) VALUES (%s)",
+                    ("_health_" + uuid.uuid4().hex,))
+        conn.rollback()
     finally:
         conn.close()
