@@ -29,5 +29,20 @@ services:
     command:
       - /opt/mssql-tools18/bin/sqlcmd -b -C -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -v IDEAS_PWD="$$IDEAS_PWD" OCCASIONS_PWD="$$OCCASIONS_PWD" -i /init.sql
 
+  ideas:
+    build:
+      context: ./services/ideas
+      args:
+        GIT_SHA: local
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: mssql://ideas_user:${IDEAS_PWD}@sqlserver:1433/ideas
+      UI_ORIGIN: http://localhost:8080
+      PORT: "8000"
+    ports:
+      - "8001:8000"
+  
 volumes:
   sqldata:
