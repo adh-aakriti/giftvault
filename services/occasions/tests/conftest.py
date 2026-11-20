@@ -7,7 +7,9 @@ import pytest
 def clean_db():
     """Empty the occasions table before a test. Needs a running SQL Server."""
     if not os.environ.get("DATABASE_URL"):
-        pytest.skip("DATABASE_URL is not set: start SQL Server with docker compose to run database tests")
+        pytest.skip(
+            "DATABASE_URL is not set: start SQL Server with docker compose to run database tests"
+        )
     from app import db
 
     db.init_db()

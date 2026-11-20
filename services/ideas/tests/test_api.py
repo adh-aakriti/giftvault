@@ -1,5 +1,4 @@
 import pytest
-
 from app import main as main_module
 
 H = {"X-User-Id": "user-a"}
@@ -89,7 +88,8 @@ def test_unknown_person_gives_404(client):
 
 def test_idea_tags_are_normalised_and_returned(client):
     person_id = add_person(client)
-    response = add_idea(client, person_id, {"url": "https://example.com", "note": "boots", "tags": "Shoes, winter, shoes"})
+    payload = {"url": "https://example.com", "note": "boots", "tags": "Shoes, winter, shoes"}
+    response = add_idea(client, person_id, payload)
     assert response.status_code == 201
     idea = person(client, person_id).get_json()["ideas"][0]
     assert idea["tags"] == ["shoes", "winter"]

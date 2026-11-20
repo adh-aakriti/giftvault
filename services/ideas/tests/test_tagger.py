@@ -1,5 +1,4 @@
 import pytest
-
 from app.tagger import parse_tags
 
 
