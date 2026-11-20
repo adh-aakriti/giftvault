@@ -44,5 +44,21 @@ services:
     ports:
       - "8001:8000"
   
+  occasions:
+    build:
+      context: ./services/occasions
+      args:
+        GIT_SHA: local
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: mssql://occasions_user:${OCCASIONS_PWD}@sqlserver:1433/occasions
+      IDEAS_URL: http://ideas:8000
+      UI_ORIGIN: http://localhost:8080
+      PORT: "8000"
+    ports:
+      - "8002:8000"
+
 volumes:
   sqldata:
