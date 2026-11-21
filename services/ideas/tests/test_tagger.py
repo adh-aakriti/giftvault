@@ -1,6 +1,5 @@
 import pytest
-
-from tagger import parse_tags
+from app.tagger import parse_tags
 
 
 @pytest.mark.parametrize("raw,expected", [

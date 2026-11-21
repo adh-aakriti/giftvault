@@ -4,8 +4,52 @@ on:
   push:
   pull_request:
 
+env:
+  COMPOSE_PROJECT_NAME: giftvault
+
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install ruff==0.8.4
+
+      - name: Lint both services
+        run: ruff check services
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [ideas, occasions]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the environment file
+        run: cp .env.example .env
+
+      - name: Start SQL Server and create the databases
+        run: docker compose run --rm db-init
+
+      - name: Run the tests with coverage
+        run: |
+          set -a; . ./.env; set +a
+          if [ "${{ matrix.service }}" = "ideas" ]; then DB_PWD="$IDEAS_PWD"; else DB_PWD="$OCCASIONS_PWD"; fi
+          docker run --rm --network giftvault_default \
+            -v "$PWD/services/${{ matrix.service }}:/app" -w /app \
+            -e DATABASE_URL="mssql://${{ matrix.service }}_user:${DB_PWD}@sqlserver:1433/${{ matrix.service }}" \
+            python:3.12-slim \
+            sh -c "pip install -q -r requirements-dev.txt && pytest --cov=app --cov-report=term-missing --cov-fail-under=70"
+
   images:
+    needs: [lint, test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -31,6 +75,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: services/${{ matrix.service }}
+          provenance: false
           push: ${{ github.ref == 'refs/heads/main' }}
           build-args: GIT_SHA=${{ github.sha }}
           tags: ghcr.io/${{ env.OWNER }}/giftvault-${{ matrix.service }}:${{ github.sha }}

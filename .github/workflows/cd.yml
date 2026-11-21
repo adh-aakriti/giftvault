@@ -1,0 +1,75 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha }}
+      RG: ${{ vars.RESOURCE_GROUP }}
+      IDEAS_APP: ${{ vars.PREFIX }}-ideas
+      OCC_APP: ${{ vars.PREFIX }}-occasions
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Look up the addresses
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt
+          IDEAS_FQDN=$(az containerapp show --name "$IDEAS_APP" --resource-group "$RG" --query properties.configuration.ingress.fqdn -o tsv)
+          OCC_FQDN=$(az containerapp show --name "$OCC_APP" --resource-group "$RG" --query properties.configuration.ingress.fqdn -o tsv)
+          UI_URL=$(az storage account show --name "${{ vars.UI_STORAGE }}" --resource-group "$RG" --query primaryEndpoints.web -o tsv)
+          echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+          echo "IDEAS_URL=https://$IDEAS_FQDN" >> "$GITHUB_ENV"
+          echo "OCC_URL=https://$OCC_FQDN" >> "$GITHUB_ENV"
+          echo "UI_URL=${UI_URL%/}" >> "$GITHUB_ENV"
+
+      - name: Deploy the Ideas service
+        run: |
+          az containerapp ingress update --name "$IDEAS_APP" --resource-group "$RG" --target-port 8000
+          az containerapp update --name "$IDEAS_APP" --resource-group "$RG" \
+            --image "ghcr.io/$OWNER/giftvault-ideas:$SHA" \
+            --set-env-vars DATABASE_URL=secretref:database-url PORT=8000 "UI_ORIGIN=$UI_URL"
+
+      - name: Deploy the Occasions service
+        run: |
+          az containerapp ingress update --name "$OCC_APP" --resource-group "$RG" --target-port 8000
+          az containerapp update --name "$OCC_APP" --resource-group "$RG" \
+            --image "ghcr.io/$OWNER/giftvault-occasions:$SHA" \
+            --set-env-vars DATABASE_URL=secretref:database-url PORT=8000 "UI_ORIGIN=$UI_URL" "IDEAS_URL=$IDEAS_URL"
+
+      - name: Check both services are healthy and run this commit
+        run: |
+          for url in "$IDEAS_URL" "$OCC_URL"; do
+            body=$(curl --fail --silent --show-error --retry 30 --retry-delay 10 --retry-all-errors --max-time 30 "$url/health")
+            echo "$url/health -> $body"
+            echo "$body" | grep -q "$SHA" || { echo "the deployed version is not $SHA"; exit 1; }
+          done
+
+      - name: Publish the UI
+        if: hashFiles('ui/index.html') != ''
+        run: |
+          printf 'window.GIFTVAULT = { ideasUrl: "%s", occasionsUrl: "%s" };\n' "$IDEAS_URL" "$OCC_URL" > ui/config.js
+          az storage blob upload-batch --account-name "${{ vars.UI_STORAGE }}" --destination '$web' --source ui --overwrite --auth-mode key

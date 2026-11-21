@@ -22,7 +22,9 @@ def _connection_params():
 
 def get_connection(retry_seconds=None):
     params = _connection_params()
-    deadline = time.monotonic() + (CONNECT_RETRY_SECONDS if retry_seconds is None else retry_seconds)
+    deadline = time.monotonic() + (
+        CONNECT_RETRY_SECONDS if retry_seconds is None else retry_seconds
+    )
     delay = 1
     while True:
         try:
