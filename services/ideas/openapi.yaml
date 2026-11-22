@@ -1,0 +1,300 @@
+openapi: 3.0.3
+info:
+  title: GiftVault Ideas API
+  version: "1.0.0"
+  description: >
+    Owns people, gift ideas and tags. Every request except /health identifies
+    the visitor with the X-User-Id header (there is no login), and every row is
+    filtered by that id. The Occasions service calls GET /people/{person_id}
+    to check that a person belongs to the caller.
+paths:
+  /people:
+    get:
+      summary: List the caller's people
+      operationId: listPeople
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: People with the number of ideas saved for each.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PersonSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      summary: Add a person
+      operationId: createPerson
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+      responses:
+        "201":
+          description: Person created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Person"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /people/{person_id}:
+    get:
+      summary: Get one person with all their ideas
+      description: >
+        Ideas are ordered by priority (3 first), then newest first. Returns 404
+        both when the person does not exist and when it belongs to another user.
+      operationId: getPerson
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/PersonId"
+      responses:
+        "200":
+          description: The person and their ideas.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /people/{person_id}/ideas:
+    post:
+      summary: Add an idea for a person
+      description: At least one of url and note must be non-empty.
+      operationId: createIdea
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/PersonId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  maxLength: 2000
+                note:
+                  type: string
+                  maxLength: 2000
+                priority:
+                  type: integer
+                  minimum: 1
+                  maximum: 3
+                  default: 2
+                tags:
+                  description: A list of names, or one comma-separated string.
+                  oneOf:
+                    - type: array
+                      items:
+                        type: string
+                    - type: string
+      responses:
+        "201":
+          description: Idea created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id:
+                    type: integer
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /ideas/{idea_id}:
+    patch:
+      summary: Change the priority of an idea
+      operationId: setIdeaPriority
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - name: idea_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [priority]
+              properties:
+                priority:
+                  type: integer
+                  minimum: 1
+                  maximum: 3
+      responses:
+        "200":
+          description: Priority updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, priority]
+                properties:
+                  id:
+                    type: integer
+                  priority:
+                    type: integer
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /tags:
+    get:
+      summary: List the caller's tag names, alphabetically
+      operationId: listTags
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Tag names.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /health:
+    get:
+      summary: Liveness and database check
+      description: Needs no X-User-Id. version is the git SHA of the deployed image.
+      operationId: health
+      responses:
+        "200":
+          description: Service and database are reachable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "503":
+          description: The database cannot be reached.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+components:
+  parameters:
+    UserId:
+      name: X-User-Id
+      in: header
+      required: true
+      description: Random visitor id, at most 64 characters.
+      schema:
+        type: string
+        maxLength: 64
+    PersonId:
+      name: person_id
+      in: path
+      required: true
+      schema:
+        type: integer
+  responses:
+    BadRequest:
+      description: Missing or invalid input.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: No such row for this user.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    Person:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+    PersonSummary:
+      type: object
+      required: [id, name, idea_count]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        idea_count:
+          type: integer
+    PersonDetail:
+      type: object
+      required: [id, name, ideas]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        ideas:
+          type: array
+          items:
+            $ref: "#/components/schemas/Idea"
+    Idea:
+      type: object
+      required: [id, url, note, created_at, priority, given_at, tags]
+      properties:
+        id:
+          type: integer
+        url:
+          type: string
+        note:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 3
+        given_at:
+          type: string
+          format: date-time
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+    Health:
+      type: object
+      required: [status, db, version]
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+        db:
+          type: string
+          enum: [ok, error]
+        version:
+          type: string
