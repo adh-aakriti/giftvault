@@ -41,7 +41,7 @@ def add_cors_and_log(response):
     if origin and origin == UI_ORIGIN:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-User-Id"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, OPTIONS"
         response.headers["Vary"] = "Origin"
     ms = (time.monotonic() - g.get("start", time.monotonic())) * 1000
     print(f"{request.method} {request.path} {response.status_code} {ms:.0f}ms", flush=True)
@@ -85,6 +85,7 @@ def get_person(person_id):
             "url": r["url"],
             "note": r["note"],
             "created_at": iso(r["created_at"]),
+            "priority": r["priority"],
             "given_at": iso(r["given_at"]),
             "tags": ideas.tags_for_idea(r["id"]),
         }
@@ -104,7 +105,10 @@ def create_idea(person_id):
         return jsonify(error="Add a link or a note."), 400
     if len(url) > 2000 or len(note) > 2000:
         return jsonify(error="url and note are limited to 2000 characters"), 400
-    idea_id = ideas.add_idea(person_id, url, note)
+    priority = parse_priority(body)
+    if priority is None:
+        return jsonify(error="priority must be a whole number from 1 to 3"), 400
+    idea_id = ideas.add_idea(person_id, url, note, priority)
     raw_tags = body.get("tags") or ""
     if isinstance(raw_tags, list):
         raw_tags = ",".join(str(t) for t in raw_tags)
@@ -112,6 +116,27 @@ def create_idea(person_id):
     if tag_names:
         ideas.set_tags(g.user_id, idea_id, tag_names)
     return jsonify(id=idea_id), 201
+
+
+def parse_priority(body, default=2):
+    """Return the priority from a request body, or None if it is not a whole number 1 to 3."""
+    value = body.get("priority", default)
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 3:
+        return None
+    return value
+
+
+@app.route("/ideas/<int:idea_id>", methods=["PATCH"])
+def update_idea(idea_id):
+    body = json_body()
+    if "priority" not in body:
+        return jsonify(error="nothing to change: send a priority"), 400
+    priority = parse_priority(body)
+    if priority is None:
+        return jsonify(error="priority must be a whole number from 1 to 3"), 400
+    if not ideas.set_priority(g.user_id, idea_id, priority):
+        return jsonify(error="idea not found"), 404
+    return jsonify(id=idea_id, priority=priority)
 
 
 @app.route("/tags", methods=["GET"])

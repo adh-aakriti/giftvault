@@ -17,9 +17,9 @@ def list_ideas(person_id):
     conn = get_connection()
     cur = conn.cursor(as_dict=True)
     cur.execute(
-        """SELECT id, url, note, created_at, given_at
+        """SELECT id, url, note, priority, created_at, given_at
            FROM ideas WHERE person_id = %s
-           ORDER BY created_at DESC""",
+           ORDER BY priority DESC, created_at DESC""",
         (person_id,),
     )
     rows = cur.fetchall()
@@ -27,12 +27,13 @@ def list_ideas(person_id):
     return rows
 
 
-def add_idea(person_id, url, note):
+def add_idea(person_id, url, note, priority=2):
     conn = get_connection()
     cur = conn.cursor(as_dict=True)
     cur.execute(
-        "INSERT INTO ideas (person_id, url, note) OUTPUT INSERTED.id VALUES (%s, %s, %s)",
-        (person_id, url.strip() or None, note.strip() or None),
+        "INSERT INTO ideas (person_id, url, note, priority) "
+        "OUTPUT INSERTED.id VALUES (%s, %s, %s, %s)",
+        (person_id, url.strip() or None, note.strip() or None, priority),
     )
     idea_id = cur.fetchone()["id"]
     conn.commit()
@@ -100,3 +101,19 @@ def all_tags(user_id):
     rows = cur.fetchall()
     conn.close()
     return [r["name"] for r in rows]
+
+
+def set_priority(user_id, idea_id, priority):
+    """Change an idea's priority. Returns False if the idea is not this user's."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE i SET i.priority = %s FROM ideas i "
+        "JOIN people p ON p.id = i.person_id "
+        "WHERE i.id = %s AND p.user_id = %s",
+        (priority, idea_id, user_id),
+    )
+    changed = cur.rowcount
+    conn.commit()
+    conn.close()
+    return changed > 0
