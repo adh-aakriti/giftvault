@@ -60,5 +60,12 @@ services:
     ports:
       - "8002:8000"
 
+  ui:
+    image: nginx:alpine
+    volumes:
+      - ./ui:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+
 volumes:
   sqldata:
