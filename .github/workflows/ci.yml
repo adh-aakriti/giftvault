@@ -69,8 +69,60 @@ jobs:
             python:3.12-slim \
             sh -c "pip install -q -r requirements-dev.txt && pytest --cov=app --cov-report=term-missing --cov-fail-under=70"
 
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the environment file
+        run: cp .env.example .env
+
+      - name: Start both services with their databases
+        run: docker compose up -d --build ideas occasions
+
+      - name: Wait for both services to answer /health
+        run: |
+          for port in 8001 8002; do
+            ok=0
+            for i in $(seq 1 60); do
+              if curl -fsS "http://localhost:$port/health" > /dev/null; then
+                ok=1
+                break
+              fi
+              sleep 2
+            done
+            [ "$ok" = 1 ] || { echo "port $port never became healthy"; exit 1; }
+          done
+
+      - name: Create a person, an idea and an occasion through the real services
+        run: |
+          set -euo pipefail
+          H='Content-Type: application/json'
+          U='X-User-Id: smoke-test'
+          IDEAS=http://localhost:8001
+          OCC=http://localhost:8002
+          id=$(curl -fsS -X POST "$IDEAS/people" -H "$H" -H "$U" \
+            -d '{"name":"Smoke Test"}' | jq -r .id)
+          curl -fsS -X POST "$IDEAS/people/$id/ideas" -H "$H" -H "$U" \
+            -d '{"note":"a smoke test idea"}' > /dev/null
+          day=$(date -u -d tomorrow +%F)
+          curl -fsS -X POST "$OCC/people/$id/occasions" -H "$H" -H "$U" \
+            -d "{\"label\":\"smoke\",\"date\":\"$day\"}" > /dev/null
+          curl -fsS "$OCC/upcoming" -H "$U" | tee upcoming.json
+          jq -e '.degraded == false
+            and .occasions[0].person_name == "Smoke Test"
+            and .occasions[0].idea_count == 1' upcoming.json
+
+      - name: Show the logs if anything failed
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v
+
   images:
-    needs: [lint, validate, test]
+    needs: [lint, validate, test, smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: read
