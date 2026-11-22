@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GiftVault</title>
+<style>
+  :root {
+    --bg: #faf7f2; --card: #ffffff; --fg: #2b2622; --muted: #6f655c;
+    --line: #e6dfd5; --accent: #b4482f; --accent-fg: #ffffff; --warn: #fff3d6;
+    --warn-fg: #5c4300; --err: #fde7e4; --err-fg: #7a1f12;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1917; --card: #26211e; --fg: #f1ebe4; --muted: #a79d93;
+      --line: #3a332e; --accent: #e07a5f; --accent-fg: #1c1917; --warn: #3b2f12;
+      --warn-fg: #f3deaa; --err: #4a2019; --err-fg: #ffd2cb;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { margin: 0 0 4px; font-size: 1.8rem; }
+  h2 { margin: 32px 0 12px; font-size: 1.15rem; }
+  .tagline, .meta, .empty { color: var(--muted); }
+  .tagline { margin: 0 0 16px; }
+  .meta { display: block; font-size: 0.9rem; }
+  section, .notice {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 4px 16px 16px;
+  }
+  .notice { padding: 10px 16px; margin: 12px 0; }
+  #waking, #degraded { background: var(--warn); color: var(--warn-fg); }
+  #error { background: var(--err); color: var(--err-fg); }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  li:last-child { border-bottom: 0; }
+  form { display: grid; gap: 10px; margin-top: 12px; }
+  label { display: grid; gap: 4px; font-size: 0.9rem; color: var(--muted); }
+  label.inline { display: flex; align-items: center; gap: 8px; }
+  input, select, textarea, button { font: inherit; }
+  input[type=text], input[type=date], select, textarea {
+    width: 100%; padding: 8px 10px; color: var(--fg); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px;
+  }
+  button {
+    padding: 8px 14px; border: 0; border-radius: 8px; cursor: pointer;
+    background: var(--accent); color: var(--accent-fg); justify-self: start;
+  }
+  button.link {
+    padding: 0; background: none; color: var(--accent); font-weight: 600;
+    text-decoration: underline;
+  }
+  .tag {
+    display: inline-block; margin: 4px 6px 0 0; padding: 0 8px; font-size: 0.8rem;
+    border: 1px solid var(--line); border-radius: 999px; color: var(--muted);
+  }
+  .idea-head { display: flex; gap: 12px; justify-content: space-between; align-items: start; }
+  .idea-head a, .idea-head span { overflow-wrap: anywhere; }
+  .idea-head select { width: auto; flex: none; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>GiftVault</h1>
+  <p class="tagline">Keep gift ideas for the people you care about, and never miss the day.</p>
+
+  <div id="waking" class="notice" role="status" hidden>
+    The service is waking up after being idle. This can take up to 30 seconds.
+  </div>
+  <div id="error" class="notice" role="alert" hidden></div>
+
+  <h2>Coming up</h2>
+  <section>
+    <div id="degraded" class="notice" role="status" hidden>
+      The Ideas service is not reachable, so names and idea counts are missing for now.
+    </div>
+    <ul id="upcoming-list"></ul>
+  </section>
+
+  <h2>People</h2>
+  <section>
+    <ul id="people-list"></ul>
+    <form id="person-form">
+      <label>Add a person
+        <input type="text" id="person-name" maxlength="200" required>
+      </label>
+      <button type="submit">Add person</button>
+    </form>
+  </section>
+
+  <div id="detail" hidden>
+    <h2 id="person-title"></h2>
+    <section>
+      <h3>Ideas</h3>
+      <ul id="ideas-list"></ul>
+      <form id="idea-form">
+        <label>Link <input type="text" id="idea-url" maxlength="2000"></label>
+        <label>Note <textarea id="idea-note" rows="2" maxlength="2000"></textarea></label>
+        <label>Priority
+          <select id="idea-priority">
+            <option value="3">Top pick</option>
+            <option value="2" selected>Good</option>
+            <option value="1">Maybe</option>
+          </select>
+        </label>
+        <label>Tags (comma separated) <input type="text" id="idea-tags"></label>
+        <button type="submit">Add idea</button>
+      </form>
+    </section>
+
+    <section style="margin-top: 16px">
+      <h3>Occasions</h3>
+      <ul id="occasions-list"></ul>
+      <form id="occasion-form">
+        <label>What <input type="text" id="occasion-label" maxlength="200" required></label>
+        <label>Date <input type="date" id="occasion-date" required></label>
+        <label class="inline">
+          <input type="checkbox" id="occasion-recurs"> Repeats every year
+        </label>
+        <button type="submit">Add occasion</button>
+      </form>
+    </section>
+  </div>
+</main>
+
+<script src="config.js"></script>
+<script>
+(() => {
+  const cfg = window.GIFTVAULT || {};
+  const IDEAS = String(cfg.ideasUrl || "").replace(/\/+$/, "");
+  const OCC = String(cfg.occasionsUrl || "").replace(/\/+$/, "");
+  const PRIORITY = { 1: "Maybe", 2: "Good", 3: "Top pick" };
+  const $ = (id) => document.getElementById(id);
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  // There is no login: each browser gets a random id that the services use
+  // to decide whose rows are whose.
+  function visitorId() {
+    try {
+      let id = localStorage.getItem("giftvault_visitor");
+      if (!id) {
+        id = crypto.randomUUID();
+        localStorage.setItem("giftvault_visitor", id);
+      }
+      return id;
+    } catch (e) {
+      return crypto.randomUUID();
+    }
+  }
+  const VISITOR = visitorId();
+
+  // Build DOM nodes without innerHTML, so user text can never become markup.
+  function h(tag, props, ...kids) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props || {})) {
+      if (key === "class") node.className = value;
+      else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+      else node.setAttribute(key, value);
+    }
+    for (const kid of kids.flat()) {
+      if (kid !== null && kid !== undefined && kid !== false) {
+        node.append(kid instanceof Node ? kid : String(kid));
+      }
+    }
+    return node;
+  }
+
+  // Container Apps scale to zero, so the first request after a quiet period
+  // can take a while. Show a notice if anything is slow.
+  let pending = 0;
+  let wakeTimer = null;
+  function busy(delta) {
+    pending += delta;
+    if (pending > 0 && wakeTimer === null) {
+      wakeTimer = setTimeout(() => { $("waking").hidden = false; }, 3000);
+    }
+    if (pending === 0) {
+      clearTimeout(wakeTimer);
+      wakeTimer = null;
+      $("waking").hidden = true;
+    }
+  }
+
+  // Reads are retried while the service starts. Writes are sent once, so a
+  // slow save is never repeated and saved twice.
+  async function api(base, path, options = {}) {
+    const method = options.method || "GET";
+    const headers = { "X-User-Id": VISITOR };
+    if (options.json !== undefined) headers["Content-Type"] = "application/json";
+    const attempts = method === "GET" ? 6 : 1;
+    busy(1);
+    try {
+      for (let attempt = 1; ; attempt++) {
+        let res;
+        try {
+          res = await fetch(base + path, {
+            method,
+            headers,
+            signal: AbortSignal.timeout(25000),
+            body: options.json === undefined ? undefined : JSON.stringify(options.json),
+          });
+        } catch (e) {
+          if (attempt < attempts) { await sleep(2000); continue; }
+          throw new Error("Could not reach the service. Try again in a moment.");
+        }
+        if ((res.status === 502 || res.status === 504) && attempt < attempts) {
+          await sleep(2000);
+          continue;
+        }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Something went wrong (" + res.status + ").");
+        return data;
+      }
+    } finally {
+      busy(-1);
+    }
+  }
+
+  function showError(err) {
+    $("error").textContent = err.message;
+    $("error").hidden = false;
+  }
+  async function guarded(task) {
+    try {
+      $("error").hidden = true;
+      await task();
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
+  function when(days) {
+    if (days === 0) return "today";
+    if (days === 1) return "tomorrow";
+    return "in " + days + " days";
+  }
+
+  async function loadUpcoming() {
+    const data = await api(OCC, "/upcoming");
+    $("degraded").hidden = !data.degraded;
+    const list = $("upcoming-list");
+    list.replaceChildren();
+    if (!data.occasions.length) {
+      list.append(h("li", { class: "empty" }, "Nothing coming up. Open a person to add an occasion."));
+    }
+    for (const o of data.occasions) {
+      const ideas = o.idea_count === null ? "" : " · " + plural(o.idea_count, "idea");
+      list.append(h("li", {},
+        h("strong", {}, o.label), " for ", o.person_name || "an unknown person",
+        h("span", { class: "meta" }, when(o.days) + " · " + o.date + ideas)));
+    }
+  }
+
+  async function loadPeople() {
+    const people = await api(IDEAS, "/people");
+    const list = $("people-list");
+    list.replaceChildren();
+    if (!people.length) {
+      list.append(h("li", { class: "empty" }, "No one yet. Add the first person below."));
+    }
+    for (const p of people) {
+      list.append(h("li", {},
+        h("button", { type: "button", class: "link", onclick: () => guarded(() => openPerson(p.id)) }, p.name),
+        h("span", { class: "meta" }, plural(p.idea_count, "idea"))));
+    }
+  }
+
+  let currentId = null;
+
+  async function openPerson(id) {
+    currentId = id;
+    const [person, occasions] = await Promise.allSettled([
+      api(IDEAS, "/people/" + id),
+      api(OCC, "/people/" + id + "/occasions"),
+    ]);
+    if (person.status === "rejected") throw person.reason;
+    renderPerson(person.value, occasions);
+  }
+
+  function ideaItem(idea) {
+    const isLink = /^https?:\/\//i.test(idea.url);
+    const what = isLink
+      ? h("a", { href: idea.url, target: "_blank", rel: "noopener noreferrer" }, idea.url)
+      : h("span", {}, idea.url);
+    const select = h("select", {
+      "aria-label": "Priority",
+      onchange: (e) => guarded(async () => {
+        await api(IDEAS, "/ideas/" + idea.id, { method: "PATCH", json: { priority: Number(e.target.value) } });
+        await openPerson(currentId);
+      }),
+    }, [3, 2, 1].map((n) => h("option", { value: n }, PRIORITY[n])));
+    select.value = String(idea.priority);
+    return h("li", {},
+      h("div", { class: "idea-head" }, idea.url ? what : h("span", {}, idea.note), select),
+      idea.url && idea.note ? h("div", {}, idea.note) : null,
+      h("div", {}, idea.tags.map((t) => h("span", { class: "tag" }, t))),
+      idea.given_at ? h("span", { class: "meta" }, "Given") : null);
+  }
+
+  function renderPerson(person, occasions) {
+    $("person-title").textContent = person.name;
+    const ideas = $("ideas-list");
+    ideas.replaceChildren();
+    if (!person.ideas.length) ideas.append(h("li", { class: "empty" }, "No ideas yet."));
+    for (const idea of person.ideas) ideas.append(ideaItem(idea));
+
+    const list = $("occasions-list");
+    list.replaceChildren();
+    if (occasions.status === "rejected") {
+      list.append(h("li", { class: "empty" }, "Occasions could not be loaded: " + occasions.reason.message));
+    } else if (!occasions.value.occasions.length) {
+      list.append(h("li", { class: "empty" }, "No occasions yet."));
+    } else {
+      for (const o of occasions.value.occasions) {
+        list.append(h("li", {}, h("strong", {}, o.label),
+          h("span", { class: "meta" }, o.date + (o.recurs_annually ? " · every year" : ""))));
+      }
+    }
+    $("detail").hidden = false;
+    $("detail").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  $("person-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    guarded(async () => {
+      await api(IDEAS, "/people", { method: "POST", json: { name: $("person-name").value } });
+      $("person-name").value = "";
+      await loadPeople();
+    });
+  });
+
+  $("idea-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    guarded(async () => {
+      const url = $("idea-url").value.trim();
+      const note = $("idea-note").value.trim();
+      if (!url && !note) throw new Error("Add a link or a note.");
+      await api(IDEAS, "/people/" + currentId + "/ideas", {
+        method: "POST",
+        json: { url, note, priority: Number($("idea-priority").value), tags: $("idea-tags").value },
+      });
+      e.target.reset();
+      await Promise.all([openPerson(currentId), loadPeople()]);
+    });
+  });
+
+  $("occasion-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    guarded(async () => {
+      await api(OCC, "/people/" + currentId + "/occasions", {
+        method: "POST",
+        json: {
+          label: $("occasion-label").value,
+          date: $("occasion-date").value,
+          recurs_annually: $("occasion-recurs").checked,
+        },
+      });
+      e.target.reset();
+      await Promise.all([openPerson(currentId), loadUpcoming()]);
+    });
+  });
+
+  if (!IDEAS || !OCC) {
+    showError(new Error("config.js is missing the service addresses."));
+  } else {
+    guarded(loadPeople);
+    guarded(loadUpcoming);
+  }
+})();
+</script>
+</body>
+</html>
