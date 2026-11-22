@@ -1,0 +1,211 @@
+openapi: 3.0.3
+info:
+  title: GiftVault Occasions API
+  version: "1.0.0"
+  description: >
+    Owns dates worth remembering (birthdays, anniversaries) and the countdown
+    to the next one. Every request except /health identifies the visitor with
+    the X-User-Id header. Person names and idea counts are not stored here:
+    this service asks the Ideas service for them, with a 3 second timeout. If
+    Ideas cannot be reached, reading still works and the response is marked
+    degraded, while creating an occasion fails with 503 because the person
+    cannot be verified.
+paths:
+  /people/{person_id}/occasions:
+    post:
+      summary: Add an occasion for a person
+      description: >
+        The person is checked against the Ideas service before anything is
+        saved.
+      operationId: createOccasion
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/PersonId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label, date]
+              properties:
+                label:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Trimmed before saving.
+                date:
+                  type: string
+                  format: date
+                  description: A real calendar date, YYYY-MM-DD.
+                recurs_annually:
+                  type: boolean
+                  default: false
+      responses:
+        "201":
+          description: Occasion created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Occasion"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: The Ideas service says this person does not exist for this user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: The Ideas service is unavailable, so the person could not be checked.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      summary: List the occasions saved for a person
+      operationId: listOccasions
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/PersonId"
+      responses:
+        "200":
+          description: The person's occasions, with the date as it was saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [occasions]
+                properties:
+                  occasions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Occasion"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /upcoming:
+    get:
+      summary: Countdown to the caller's next occasions, soonest first
+      description: >
+        Each item shows the next time the occasion happens. One request to
+        Ideas is made per distinct person. If Ideas cannot be reached,
+        degraded is true and person_name and idea_count are null.
+      operationId: listUpcoming
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Upcoming occasions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [occasions, degraded]
+                properties:
+                  occasions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/UpcomingOccasion"
+                  degraded:
+                    type: boolean
+                    description: True when the Ideas service could not be reached.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /health:
+    get:
+      summary: Liveness and database check
+      description: Needs no X-User-Id. version is the git SHA of the deployed image.
+      operationId: health
+      responses:
+        "200":
+          description: Service and database are reachable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "503":
+          description: The database cannot be reached.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+components:
+  parameters:
+    UserId:
+      name: X-User-Id
+      in: header
+      required: true
+      description: Random visitor id, at most 64 characters.
+      schema:
+        type: string
+        maxLength: 64
+    PersonId:
+      name: person_id
+      in: path
+      required: true
+      schema:
+        type: integer
+  responses:
+    BadRequest:
+      description: Missing or invalid input.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    Occasion:
+      type: object
+      required: [id, person_id, label, date, recurs_annually]
+      properties:
+        id:
+          type: integer
+        person_id:
+          type: integer
+        label:
+          type: string
+        date:
+          type: string
+          format: date
+        recurs_annually:
+          type: boolean
+    UpcomingOccasion:
+      type: object
+      required: [id, label, person_id, person_name, date, days, idea_count]
+      properties:
+        id:
+          type: integer
+        label:
+          type: string
+        person_id:
+          type: integer
+        person_name:
+          type: string
+          nullable: true
+        date:
+          type: string
+          format: date
+          description: The next time this occasion happens.
+        days:
+          type: integer
+          description: Days from today until that date.
+        idea_count:
+          type: integer
+          nullable: true
+    Health:
+      type: object
+      required: [status, service, version]
+      properties:
+        status:
+          type: string
+          enum: [ok, unavailable]
+        service:
+          type: string
+          enum: [occasions]
+        version:
+          type: string
