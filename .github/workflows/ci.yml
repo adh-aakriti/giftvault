@@ -23,6 +23,27 @@ jobs:
       - name: Lint both services
         run: ruff check services
 
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the validators
+        run: pip install check-jsonschema==0.39.0 openapi-spec-validator==0.9.0
+
+      - name: Check system.yaml against the provided schema
+        run: check-jsonschema --schemafile system.schema.json system.yaml
+
+      - name: Check each OpenAPI document against the OpenAPI specification
+        run: |
+          for f in services/*/openapi.yaml; do
+            openapi-spec-validator "$f"
+          done
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -49,7 +70,7 @@ jobs:
             sh -c "pip install -q -r requirements-dev.txt && pytest --cov=app --cov-report=term-missing --cov-fail-under=70"
 
   images:
-    needs: [lint, test]
+    needs: [lint, validate, test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
